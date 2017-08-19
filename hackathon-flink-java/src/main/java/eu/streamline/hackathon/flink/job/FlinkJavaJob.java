@@ -5,6 +5,7 @@ import eu.streamline.hackathon.flink.operations.GDELTInputFormat;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.functions.FoldFunction;
 import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.core.fs.Path;
@@ -58,22 +59,19 @@ public class FlinkJavaJob {
 			public String getKey(GDELTEvent gdeltEvent) throws Exception {
 				return getContinent(gdeltEvent.actor1Code_countryCode);
 			}
-		}).window(TumblingEventTimeWindows.of(Time.days(1))).fold(0.0,
-						new FoldFunction<GDELTEvent, Double>() {
+		}).window(TumblingEventTimeWindows.of(Time.days(1))).fold(new Tuple2<>(0.0,0),
+						new FoldFunction<GDELTEvent, Tuple2<Double, Integer>>() {
 							@Override
-							public Double fold(Double acc, GDELTEvent o) throws Exception {
-								return acc + o.avgTone;
+							public Tuple2<Double, Integer> fold(Tuple2<Double, Integer> acc, GDELTEvent o) throws Exception {
+								return new Tuple2<>(((double) acc.getField(0)) + o.avgTone, ((int) acc.getField(1)) + 1);
 							}
 						},
-						new WindowFunction<Double, Tuple4<String, Double, Date, Date>, String, TimeWindow>() {
+						new WindowFunction<Tuple2<Double, Integer>, Tuple4<String, Double, Date, Date>, String, TimeWindow>() {
 							@Override
-							public void apply(String key, TimeWindow window, Iterable<Double> input, Collector<Tuple4<String, Double, Date, Date>> out) throws Exception {
-								Iterator<Double> it = input.iterator();
-								long count = 0;
-								for (Double in: input) {
-									count++;
-								}
-								out.collect(new Tuple4<>(key, it.next(), new Date(window.getStart()), new Date(window.getEnd())));
+							public void apply(String key, TimeWindow window, Iterable<Tuple2<Double,Integer>> input, Collector<Tuple4<String, Double, Date, Date>> out) throws Exception {
+								Iterator<Tuple2<Double,Integer>> it = input.iterator();
+                                Tuple2<Double,Integer> tp = it.next();
+								out.collect(new Tuple4<>(key, ((double)tp.getField(0))/((int)tp.getField(1)), new Date(window.getStart()), new Date(window.getEnd())));
 							}
 						}).print();
 
