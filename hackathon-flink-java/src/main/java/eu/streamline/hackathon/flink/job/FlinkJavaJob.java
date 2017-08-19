@@ -26,6 +26,7 @@ import java.util.Objects;
 
 public class FlinkJavaJob {
 
+
 	private static final Logger LOG = LoggerFactory.getLogger(FlinkJavaJob.class);
 
 	public static void main(String[] args) {
@@ -38,40 +39,43 @@ public class FlinkJavaJob {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
 		DataStream<GDELTEvent> source = env
-			.readFile(new GDELTInputFormat(new Path(pathToGDELT)), pathToGDELT).setParallelism(1);
+				.readFile(new GDELTInputFormat(new Path(pathToGDELT)), pathToGDELT).setParallelism(1);
 
 
 		source.filter(new FilterFunction<GDELTEvent>() {
 			@Override
 			public boolean filter(GDELTEvent gdeltEvent) throws Exception {
-				return Objects.equals(gdeltEvent.actor1Code_countryCode, country);
+				return gdeltEvent.actor1Code_countryCode != null;
 			}
 		}).assignTimestampsAndWatermarks(
-			new BoundedOutOfOrdernessTimestampExtractor<GDELTEvent>(Time.seconds(0)) {
-				@Override
-				public long extractTimestamp(GDELTEvent element) {
-					return element.dateAdded.getTime();
-				}
-		}).keyBy(new KeySelector<GDELTEvent, String>() {
+				new BoundedOutOfOrdernessTimestampExtractor<GDELTEvent>(Time.seconds(0)) {
+					@Override
+					public long extractTimestamp(GDELTEvent element) {
+						return element.dateAdded.getTime();
+					}
+				}).keyBy(new KeySelector<GDELTEvent, String>() {
 			@Override
 			public String getKey(GDELTEvent gdeltEvent) throws Exception {
 				return gdeltEvent.actor1Code_countryCode;
 			}
 		}).window(TumblingEventTimeWindows.of(Time.days(1))).fold(0.0,
-			new FoldFunction<GDELTEvent, Double>() {
-				@Override
-				public Double fold(Double acc, GDELTEvent o) throws Exception {
-					return acc + o.avgTone;
-				}
-			},
-			new WindowFunction<Double, Tuple4<String, Double, Date, Date>, String, TimeWindow>() {
-				@Override
-				public void apply(String key, TimeWindow window, Iterable<Double> input, Collector<Tuple4<String, Double, Date, Date>> out) throws Exception {
-					Iterator<Double> it = input.iterator();
-					out.collect(new Tuple4<>(key, it.next(), new Date(window.getStart()), new Date(window.getEnd())));
-				}
-		}).print();
-
+						new FoldFunction<GDELTEvent, Double>() {
+							@Override
+							public Double fold(Double acc, GDELTEvent o) throws Exception {
+								return acc + o.avgTone;
+							}
+						},
+						new WindowFunction<Double, Tuple4<String, Double, Date, Date>, String, TimeWindow>() {
+							@Override
+							public void apply(String key, TimeWindow window, Iterable<Double> input, Collector<Tuple4<String, Double, Date, Date>> out) throws Exception {
+								Iterator<Double> it = input.iterator();
+								long count = 0;
+								for (Double in: input) {
+									count++;
+								}
+								out.collect(new Tuple4<>(key, it.next(), new Date(window.getStart()), new Date(window.getEnd())));
+							}
+						}).print();
 
 
 		try {
@@ -81,7 +85,7 @@ public class FlinkJavaJob {
 		}
 
 
-
 	}
+
 
 }
