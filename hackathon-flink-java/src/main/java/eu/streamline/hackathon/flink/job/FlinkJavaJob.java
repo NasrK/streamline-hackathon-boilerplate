@@ -43,45 +43,44 @@ public class FlinkJavaJob {
 				.readFile(new GDELTInputFormat(new Path(pathToGDELT)), pathToGDELT).setParallelism(1);
 
 
-		source.filter(new FilterFunction<GDELTEvent>() {
-			@Override
-			public boolean filter(GDELTEvent gdeltEvent) throws Exception {
-				return gdeltEvent.actor1Code_countryCode != null;
-			}
-		}).assignTimestampsAndWatermarks(
-				new BoundedOutOfOrdernessTimestampExtractor<GDELTEvent>(Time.seconds(0)) {
-					@Override
-					public long extractTimestamp(GDELTEvent element) {
-						return element.dateAdded.getTime();
-					}
-				}).keyBy(new KeySelector<GDELTEvent, String>() {
-			@Override
-			public String getKey(GDELTEvent gdeltEvent) throws Exception {
-				return getContinent(gdeltEvent.actor1Code_countryCode);
-			}
-		}).window(TumblingEventTimeWindows.of(Time.days(1))).fold(new Tuple2<>(0.0,0),
-						new FoldFunction<GDELTEvent, Tuple2<Double, Integer>>() {
-							@Override
-							public Tuple2<Double, Integer> fold(Tuple2<Double, Integer> acc, GDELTEvent o) throws Exception {
-								return new Tuple2<>(((double) acc.getField(0)) + o.avgTone, ((int) acc.getField(1)) + 1);
-							}
-						},
-						new WindowFunction<Tuple2<Double, Integer>, Tuple4<String, Double, Date, Date>, String, TimeWindow>() {
-							@Override
-							public void apply(String key, TimeWindow window, Iterable<Tuple2<Double,Integer>> input, Collector<Tuple4<String, Double, Date, Date>> out) throws Exception {
-								Iterator<Tuple2<Double,Integer>> it = input.iterator();
-                                Tuple2<Double,Integer> tp = it.next();
-								out.collect(new Tuple4<>(key, ((double)tp.getField(0))/((int)tp.getField(1)), new Date(window.getStart()), new Date(window.getEnd())));
-							}
-						}).print();
 
+        source.filter(new FilterFunction<GDELTEvent>() {
+            @Override
+            public boolean filter(GDELTEvent gdeltEvent) throws Exception {
+                return gdeltEvent.actor1Code_countryCode != null;
+            }
+        }).assignTimestampsAndWatermarks(
+                new BoundedOutOfOrdernessTimestampExtractor<GDELTEvent>(Time.seconds(0)) {
+                    @Override
+                    public long extractTimestamp(GDELTEvent element) {
+                        return element.dateAdded.getTime();
+                    }
+                }).keyBy(new KeySelector<GDELTEvent, String>() {
+            @Override
+            public String getKey(GDELTEvent gdeltEvent) throws Exception {
+                return getContinent(gdeltEvent.actor1Code_countryCode);
+            }
+        }).window(TumblingEventTimeWindows.of(Time.days(1))).fold(new Tuple2<>(0.0,0),
+                new FoldFunction<GDELTEvent, Tuple2<Double, Integer>>() {
+                    @Override
+                    public Tuple2<Double, Integer> fold(Tuple2<Double, Integer> acc, GDELTEvent o) throws Exception {
+                        return new Tuple2<>(((double) acc.getField(0)) + o.avgTone, ((int) acc.getField(1)) + 1);
+                    }
+                },
+                new WindowFunction<Tuple2<Double, Integer>, Tuple4<String, Double, Date, Date>, String, TimeWindow>() {
+                    @Override
+                    public void apply(String key, TimeWindow window, Iterable<Tuple2<Double,Integer>> input, Collector<Tuple4<String, Double, Date, Date>> out) throws Exception {
+                        Iterator<Tuple2<Double,Integer>> it = input.iterator();
+                        Tuple2<Double,Integer> tp = it.next();
+                        out.collect(new Tuple4<>(key, ((double)tp.getField(0))/((int)tp.getField(1)), new Date(window.getStart()), new Date(window.getEnd())));
+                    }
+                }).writeAsCsv("output.csv").setParallelism(1);
 
 		try {
 			env.execute("Flink Java GDELT Analyzer");
 		} catch (Exception e) {
 			LOG.error("Failed to execute Flink job {}", e);
 		}
-
 
 	}
 
