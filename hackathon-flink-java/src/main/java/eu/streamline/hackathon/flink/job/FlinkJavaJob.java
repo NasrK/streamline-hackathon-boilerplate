@@ -53,7 +53,7 @@ public class FlinkJavaJob {
                 new BoundedOutOfOrdernessTimestampExtractor<GDELTEvent>(Time.seconds(0)) {
                     @Override
                     public long extractTimestamp(GDELTEvent element) {
-                        return element.dateAdded.getTime();
+                        return element.day.getTime();
                     }
                 }).keyBy(new KeySelector<GDELTEvent, String>() {
             @Override
@@ -74,7 +74,7 @@ public class FlinkJavaJob {
                         Tuple2<Double,Integer> tp = it.next();
                         out.collect(new Tuple4<>(key, ((double)tp.getField(0))/((int)tp.getField(1)), new Date(window.getStart()), new Date(window.getEnd())));
                     }
-                }).writeAsCsv("output.csv").setParallelism(1);
+                }).print();  //.writeAsCsv("output.csv").setParallelism(1);
 
 		try {
 			env.execute("Flink Java GDELT Analyzer");
