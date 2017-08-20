@@ -58,7 +58,8 @@ public class FlinkJavaJob {
                 }).keyBy(new KeySelector<GDELTEvent, String>() {
             @Override
             public String getKey(GDELTEvent gdeltEvent) throws Exception {
-                return getContinent(gdeltEvent.actor1Code_countryCode);
+                // return getContinent(gdeltEvent.actor1Code_countryCode);
+                return gdeltEvent.actor1Code_countryCode;
             }
         }).window(TumblingEventTimeWindows.of(Time.days(1))).fold(new Tuple2<>(0.0,0),
                 new FoldFunction<GDELTEvent, Tuple2<Double, Integer>>() {
@@ -74,7 +75,7 @@ public class FlinkJavaJob {
                         Tuple2<Double,Integer> tp = it.next();
                         out.collect(new Tuple4<>(key, ((double)tp.getField(0))/((int)tp.getField(1)), new Date(window.getStart()), new Date(window.getEnd())));
                     }
-                }).print();  //.writeAsCsv("output.csv").setParallelism(1);
+                }).writeAsCsv("output_countries.csv").setParallelism(1);
 
 		try {
 			env.execute("Flink Java GDELT Analyzer");
